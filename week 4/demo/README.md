@@ -18,9 +18,4 @@ Chạy (PowerShell):
 mvn -DskipTests package
 mvn spring-boot:run
 ```
-
-Ghi chú:
-- Đảm bảo `scope` chứa `offline_access` để provider cấp refresh token
-- Không hiển thị hoặc log token trên môi trường production
-
 ---
