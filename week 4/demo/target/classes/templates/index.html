@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Demo Auth0 Login</title>
+</head>
+<body>
+    <h1>Welcome to Demo</h1>
+
+    <div th:if="${user} == null">
+        <p>You are not logged in.</p>
+        <a th:href="@{/oauth2/authorization/auth0}">Log in with Auth0</a>
+    </div>
+
+    <div th:if="${user} != null">
+        <p>Logged in as <b th:text="${user.email}">email@example.com</b></p>
+        <p><a th:href="@{/home}">Go to home</a></p>
+        <a th:href="@{/logout}">Logout</a>
+    </div>
+
+</body>
+</html>

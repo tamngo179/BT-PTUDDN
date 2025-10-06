@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Home - Demo</title>
+</head>
+<body>
+    <h1>Home</h1>
+    <div th:if="${user} == null">
+        <p>You are not logged in. <a th:href="@{/}">Back</a></p>
+    </div>
+
+    <div th:if="${user} != null">
+        <p>Subject: <span th:text="${user.subject}"></span></p>
+        <p>Email: <span th:text="${user.email}"></span></p>
+
+        <h3>Claims</h3>
+        <ul>
+            <li th:each="entry : ${user.claims.entrySet()}">
+                <b th:text="${entry.key}"></b>: <span th:text="${entry.value}"></span>
+            </li>
+        </ul>
+
+        <a th:href="@{/logout}">Logout</a>
+    </div>
+
+    <p><a th:href="@{/}">Back</a></p>
+</body>
+</html>
