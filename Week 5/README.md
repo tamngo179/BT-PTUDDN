@@ -20,10 +20,9 @@ docker run -d -p 8080:8080 --name course-tracker course-tracker:latest
 
 # Kiểm tra container đang chạy
 docker ps
-
-<img width="1755" height="1226" alt="image" src="https://github.com/user-attachments/assets/0e966933-24ba-4b27-870d-a1e0f567855a" />
-
-
+```
+<img width="1758" height="940" alt="image" src="https://github.com/user-attachments/assets/d781652f-3f95-4230-93e9-92c697fdba6e" />
+```
 # Xem logs container
 docker logs course-tracker
 ```
