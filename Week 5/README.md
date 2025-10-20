@@ -83,7 +83,7 @@ kubectl delete -f k8s/
 ```
 
 ### K8s Resources Created
-- **Deployment**: 2 replicas with health checks
+- **Deployment**: 3 replicas with health checks
 - **Service**: LoadBalancer type for external access  
 - **ConfigMap**: Application configuration
 - **Ingress**: Optional domain-based routing
