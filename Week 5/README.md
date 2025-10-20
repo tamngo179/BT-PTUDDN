@@ -89,3 +89,5 @@ kubectl delete -f k8s/
 - **Ingress**: Optional domain-based routing
 
 ---
+<img width="3273" height="1042" alt="image" src="https://github.com/user-attachments/assets/162635a0-ebcb-48ff-bcbe-145ea23743b3" />
+
