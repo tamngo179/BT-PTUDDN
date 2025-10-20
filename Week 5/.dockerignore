@@ -1,6 +1,6 @@
 # Docker ignore file for Spring Boot Course Tracker
 
-# Maven build outputs (we'll build inside container)
+# Maven build outputs
 target/
 *.log
 
