@@ -61,8 +61,8 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./week\ 5/simple-app
-        file: ./week\ 5/simple-app/Dockerfile
+        context: ./week\ 5
+        file: ./week\ 5/Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
