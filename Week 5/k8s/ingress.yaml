@@ -1,18 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: course-tracker-ingress
+  name: simple-app-ingress
+  namespace: default
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
+  tls:
+  - hosts:
+    - simple-app.local
+    secretName: simple-app-tls
   rules:
-  - host: course-tracker.local
+  - host: simple-app.local
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: course-tracker-service
+            name: simple-app-service
             port:
               number: 80

@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
       - name: course-tracker
-        image: course-tracker:latest
-        imagePullPolicy: Never  # Use local image
+        image: ghcr.io/tamngo179/course-tracker:latest
+        imagePullPolicy: Always  # Use remote image
         ports:
         - containerPort: 8080
         env:

@@ -14,7 +14,7 @@ on:
 env:
   REGISTRY_GHCR: ghcr.io
   REGISTRY_DOCKERHUB: docker.io
-  IMAGE_NAME: simple-app
+  IMAGE_NAME: course-tracker
   
 jobs:
   build-and-push:
@@ -94,110 +94,15 @@ jobs:
         
     - name: Update Kubernetes manifest
       run: |
-        # Create k8s directory if it doesn't exist
-        mkdir -p "week 5/k8s"
-        
-        # Create deployment.yaml if it doesn't exist
-        if [ ! -f "week 5/k8s/deployment.yaml" ]; then
-          cat > "week 5/k8s/deployment.yaml" << 'EOF'
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: simple-app
-          namespace: default
-          labels:
-            app: simple-app
-            version: v1
-        spec:
-          replicas: 3
-          selector:
-            matchLabels:
-              app: simple-app
-          template:
-            metadata:
-              labels:
-                app: simple-app
-                version: v1
-            spec:
-              containers:
-              - name: simple-app
-                image: ghcr.io/tamngo179/simple-app:latest
-                ports:
-                - containerPort: 8080
-                  name: http
-                env:
-                - name: SPRING_PROFILES_ACTIVE
-                  value: "production"
-                resources:
-                  requests:
-                    memory: "256Mi"
-                    cpu: "250m"
-                  limits:
-                    memory: "512Mi"
-                    cpu: "500m"
-                readinessProbe:
-                  httpGet:
-                    path: /health
-                    port: 8080
-                  initialDelaySeconds: 30
-                  periodSeconds: 10
-                  timeoutSeconds: 5
-                livenessProbe:
-                  httpGet:
-                    path: /health
-                    port: 8080
-                  initialDelaySeconds: 60
-                  periodSeconds: 20
-                  timeoutSeconds: 5
-                  failureThreshold: 3
-        ---
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: simple-app-service
-          namespace: default
-          labels:
-            app: simple-app
-        spec:
-          selector:
-            app: simple-app
-          ports:
-            - name: http
-              protocol: TCP
-              port: 80
-              targetPort: 8080
-          type: ClusterIP
-        ---
-        apiVersion: networking.k8s.io/v1
-        kind: Ingress
-        metadata:
-          name: simple-app-ingress
-          namespace: default
-          annotations:
-            nginx.ingress.kubernetes.io/rewrite-target: /
-            cert-manager.io/cluster-issuer: "letsencrypt-prod"
-        spec:
-          tls:
-          - hosts:
-            - simple-app.local
-            secretName: simple-app-tls
-          rules:
-          - host: simple-app.local
-            http:
-              paths:
-              - path: /
-                pathType: Prefix
-                backend:
-                  service:
-                    name: simple-app-service
-                    port:
-                      number: 80
-        EOF
+        if [ -f "week 5/k8s/deployment.yaml" ]; then
+          # Update image tag in existing deployment manifest
+          NEW_TAG="sha-${{ github.sha }}"
+          sed -i "s|image: ghcr.io/.*/course-tracker:.*|image: ghcr.io/${{ github.repository_owner }}/course-tracker:${NEW_TAG}|g" "week 5/k8s/deployment.yaml"
+          echo "✅ Updated deployment.yaml with new image tag: ${NEW_TAG}"
+        else
+          echo "❌ deployment.yaml not found in week 5/k8s/"
+          exit 1
         fi
-        
-        # Update image in deployment with new tag
-        NEW_TAG="sha-${{ github.sha }}"
-        sed -i "s|image: ghcr.io/.*/simple-app:.*|image: ghcr.io/${{ github.repository_owner }}/simple-app:${NEW_TAG}|g" "week 5/k8s/deployment.yaml"
         
     - name: Create or update kustomization.yaml
       run: |
