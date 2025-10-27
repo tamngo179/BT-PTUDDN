@@ -1,330 +1,96 @@
-name: Week 5 CD - ArgoCD Deployment
+name: Week 5 CD - Simple ArgoCD Deployment
 
 on:
+  # Trigger after CI completes
   workflow_run:
     workflows: ["Week 5 CI/CD Pipeline"]
     types:
       - completed
     branches: [main]
   
-  # Manual trigger for deployment
+  # Manual trigger
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-        - staging
-        - production
-      image_tag:
-        description: 'Docker image tag to deploy'
-        required: false
-        default: 'latest'
-        type: string
       force_sync:
-        description: 'Force ArgoCD sync'
+        description: 'Force sync ArgoCD application'
         required: false
         default: false
         type: boolean
 
 env:
-  ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
-  ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+  ARGOCD_SERVER: localhost:8080
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  check-ci-status:
+  deploy:
     runs-on: ubuntu-latest
-    outputs:
-      deploy-ready: ${{ steps.check.outputs.ready }}
-      image-tag: ${{ steps.check.outputs.tag }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:
-    - name: Check CI workflow status
-      id: check
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set image tag
+      id: image-tag
       run: |
         if [ "${{ github.event_name }}" == "workflow_run" ]; then
-          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
-            echo "ready=true" >> $GITHUB_OUTPUT
-            echo "tag=sha-${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
-          else
-            echo "ready=false" >> $GITHUB_OUTPUT
-            echo "❌ CI workflow failed, skipping deployment"
-            exit 1
-          fi
+          IMAGE_TAG="sha-${{ github.event.workflow_run.head_sha }}"
         else
-          # Manual trigger
-          echo "ready=true" >> $GITHUB_OUTPUT
-          echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          IMAGE_TAG="latest"
         fi
+        echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "🏷️ Using image tag: $IMAGE_TAG"
 
-  deploy-staging:
-    needs: check-ci-status
-    if: needs.check-ci-status.outputs.deploy-ready == 'true'
-    runs-on: ubuntu-latest
-    environment: staging
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
-
-    - name: Setup ArgoCD CLI
+    - name: Update Kubernetes manifests
       run: |
-        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-        sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-        argocd version --client
-
-    - name: Login to ArgoCD
-      run: |
-        argocd login ${{ env.ARGOCD_SERVER }} \
-          --auth-token ${{ env.ARGOCD_TOKEN }} \
-          --insecure \
-          --grpc-web
-
-    - name: Create or Update ArgoCD Application for Staging
-      run: |
-        APP_NAME="course-tracker-staging"
-        REPO_URL="https://github.com/${{ github.repository }}.git"
-        TARGET_REVISION="${{ github.ref_name }}"
-        IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        
-        # Check if application exists
-        if argocd app get $APP_NAME >/dev/null 2>&1; then
-          echo "📦 Application $APP_NAME already exists, updating..."
-        else
-          echo "🚀 Creating new ArgoCD application: $APP_NAME"
-          argocd app create $APP_NAME \
-            --repo $REPO_URL \
-            --path "week 5/k8s" \
-            --dest-server https://kubernetes.default.svc \
-            --dest-namespace staging \
-            --sync-policy automated \
-            --auto-prune \
-            --self-heal \
-            --revision $TARGET_REVISION \
-            --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
-        fi
-
-    - name: Update Application Image
-      run: |
-        APP_NAME="course-tracker-staging"
-        IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
+        IMAGE_TAG="${{ steps.image-tag.outputs.tag }}"
         NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
         
-        echo "🔄 Updating image to: $NEW_IMAGE"
+        echo "� Updating deployment image to: $NEW_IMAGE"
         
-        # Update kustomization with new image tag
-        argocd app set $APP_NAME \
-          --kustomize-image "ghcr.io/${{ github.repository_owner }}/simple-app=$NEW_IMAGE"
-
-    - name: Sync Application
-      run: |
-        APP_NAME="simple-app-staging"
-        FORCE_FLAG=""
+        # Update deployment.yaml with new image
+        sed -i "s|image: ghcr.io/.*/course-tracker:.*|image: $NEW_IMAGE|g" "Week 5/k8s/deployment.yaml"
         
-        if [ "${{ github.event.inputs.force_sync }}" == "true" ]; then
-          FORCE_FLAG="--force"
+        # Commit changes back to repository
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        git add "Week 5/k8s/deployment.yaml"
+        
+        if git diff --staged --quiet; then
+          echo "📝 No changes to commit"
+        else
+          git commit -m "Update image to $NEW_IMAGE [skip ci]"
+          git push
+          echo "✅ Updated manifest committed and pushed"
         fi
-        
-        echo "🔄 Syncing ArgoCD application..."
-        argocd app sync $APP_NAME $FORCE_FLAG --prune
-        
-        echo "⏳ Waiting for sync to complete..."
-        argocd app wait $APP_NAME --timeout 300
 
-    - name: Get Application Status
+    - name: Wait for ArgoCD sync
       run: |
-        APP_NAME="simple-app-staging"
-        echo "📊 Application Status:"
-        argocd app get $APP_NAME
+        echo "⏳ Waiting for ArgoCD to detect and sync changes..."
+        echo "🔄 ArgoCD will automatically sync the updated manifests"
+        echo "📊 Check ArgoCD UI at: http://localhost:8080"
         
+        # Simple wait to allow ArgoCD to detect changes
+        sleep 30
+        
+        echo "✅ CD pipeline completed!"
+        echo "🎯 Check deployment status in ArgoCD dashboard"
+
+    - name: Summary
+      run: |
+        IMAGE_TAG="${{ steps.image-tag.outputs.tag }}"
+        
+        echo "� Week 5 Simple CD Summary"
+        echo "=========================="
         echo ""
-        echo "🏥 Health Status:"
-        argocd app get $APP_NAME -o json | jq -r '.status.health.status'
-        
-        echo ""
-        echo "🔄 Sync Status:"
-        argocd app get $APP_NAME -o json | jq -r '.status.sync.status'
-
-    - name: Validate Deployment
-      run: |
-        APP_NAME="simple-app-staging"
-        
-        # Check if application is healthy and synced
-        HEALTH=$(argocd app get $APP_NAME -o json | jq -r '.status.health.status')
-        SYNC=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.status')
-        
-        echo "Health: $HEALTH, Sync: $SYNC"
-        
-        if [ "$HEALTH" != "Healthy" ] || [ "$SYNC" != "Synced" ]; then
-          echo "❌ Deployment validation failed!"
-          echo "Health: $HEALTH (expected: Healthy)"
-          echo "Sync: $SYNC (expected: Synced)"
-          exit 1
-        else
-          echo "✅ Deployment validation passed!"
-        fi
-
-  deploy-production:
-    needs: [check-ci-status, deploy-staging]
-    if: github.event.inputs.environment == 'production' || (github.ref == 'refs/heads/main' && github.event_name == 'workflow_run')
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Setup ArgoCD CLI
-      run: |
-        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-        sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-
-    - name: Login to ArgoCD
-      run: |
-        argocd login ${{ env.ARGOCD_SERVER }} \
-          --auth-token ${{ env.ARGOCD_TOKEN }} \
-          --insecure \
-          --grpc-web
-
-    - name: Create Production ArgoCD Application
-      run: |
-        APP_NAME="course-tracker-production"
-        REPO_URL="https://github.com/${{ github.repository }}.git"
-        IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        
-        if argocd app get $APP_NAME >/dev/null 2>&1; then
-          echo "📦 Production application exists, updating..."
-        else
-          echo "🚀 Creating production ArgoCD application: $APP_NAME"
-          argocd app create $APP_NAME \
-            --repo $REPO_URL \
-            --path "week 5/k8s" \
-            --dest-server https://kubernetes.default.svc \
-            --dest-namespace production \
-            --sync-policy manual \
-            --revision main \
-            --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
-        fi
-
-    - name: Update Production Image
-      run: |
-        APP_NAME="course-tracker-production"
-        IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
-        
-        echo "🔄 Updating production image to: $NEW_IMAGE"
-        argocd app set $APP_NAME \
-          --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker=$NEW_IMAGE"
-
-    - name: Manual Production Sync
-      run: |
-        APP_NAME="course-tracker-production"
-        
-        echo "⚠️  Production deployment requires manual approval"
-        echo "🔄 Initiating manual sync..."
-        
-        # For production, we can sync but typically requires manual approval
-        argocd app sync $APP_NAME --prune
-        argocd app wait $APP_NAME --timeout 600
-
-    - name: Validate Production Deployment
-      run: |
-        APP_NAME="course-tracker-production"
-        
-        HEALTH=$(argocd app get $APP_NAME -o json | jq -r '.status.health.status')
-        SYNC=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.status')
-        
-        echo "Production Status - Health: $HEALTH, Sync: $SYNC"
-        
-        if [ "$HEALTH" == "Healthy" ] && [ "$SYNC" == "Synced" ]; then
-          echo "🎉 Production deployment successful!"
-        else
-          echo "⚠️  Production deployment needs attention"
-        fi
-
-  rollback:
-    if: failure() && github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    needs: [deploy-staging]
-    
-    steps:
-    - name: Setup ArgoCD CLI
-      run: |
-        curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-        sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-
-    - name: Login to ArgoCD
-      run: |
-        argocd login ${{ env.ARGOCD_SERVER }} \
-          --auth-token ${{ env.ARGOCD_TOKEN }} \
-          --insecure \
-          --grpc-web
-
-    - name: Rollback Application
-      run: |
-        APP_NAME="course-tracker-staging"
-        
-        echo "🔄 Rolling back application..."
-        
-        # Get previous successful revision
-        HISTORY=$(argocd app history $APP_NAME)
-        echo "Deployment history:"
-        echo "$HISTORY"
-        
-        # Rollback to previous version (you can customize this logic)
-        PREVIOUS_REVISION=$(argocd app history $APP_NAME -o json | jq -r '.[1].revision // empty')
-        
-        if [ -n "$PREVIOUS_REVISION" ]; then
-          echo "🔙 Rolling back to revision: $PREVIOUS_REVISION"
-          argocd app rollback $APP_NAME $PREVIOUS_REVISION
-        else
-          echo "⚠️  No previous revision found for rollback"
-        fi
-
-  notification:
-    needs: [deploy-staging, deploy-production]
-    if: always()
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Deployment Notification
-      run: |
-        STAGING_STATUS="${{ needs.deploy-staging.result }}"
-        PRODUCTION_STATUS="${{ needs.deploy-production.result }}"
-        IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        
-        echo "📋 Week 5 ArgoCD Deployment Summary"
-        echo "=================================="
-        echo ""
-        echo "🏷️  Image Tag: $IMAGE_TAG"
+        echo "🏷️ Image Tag: $IMAGE_TAG" 
         echo "🔄 Trigger: ${{ github.event_name }}"
+        echo "✅ Manifest updated successfully"
         echo ""
-        echo "📊 Deployment Status:"
-        echo "  Staging: $STAGING_STATUS"
-        echo "  Production: $PRODUCTION_STATUS"
+        echo "📊 Next Steps:"
+        echo "1. Check ArgoCD dashboard: http://localhost:8080"
+        echo "2. ArgoCD will auto-sync within 3 minutes"
+        echo "3. Monitor deployment status in ArgoCD UI"
         echo ""
-        
-        if [ "$STAGING_STATUS" == "success" ]; then
-          echo "✅ Staging deployment successful"
-          echo "🌐 Staging URL: https://simple-app-staging.local"
-        else
-          echo "❌ Staging deployment failed"
-        fi
-        
-        if [ "$PRODUCTION_STATUS" == "success" ]; then
-          echo "🎉 Production deployment successful"
-          echo "🌐 Production URL: https://simple-app.local"
-        elif [ "$PRODUCTION_STATUS" == "skipped" ]; then
-          echo "⏭️  Production deployment skipped"
-        else
-          echo "❌ Production deployment failed"
-        fi
-        
-        echo ""
-        echo "🔗 ArgoCD Dashboard: ${{ env.ARGOCD_SERVER }}"
+        echo "� CD Pipeline completed!"
