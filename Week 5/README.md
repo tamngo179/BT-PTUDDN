@@ -75,6 +75,9 @@ kubectl logs -l app=course-tracker -f
 
 # Scale replicas
 kubectl scale deployment course-tracker-deployment --replicas=3
+
+# Check resource usage (requires metrics server)
+kubectl top pods -l app=course-tracker
 ```
 
 **5. Cleanup:**
@@ -87,5 +90,51 @@ kubectl delete -f k8s/
 - **Service**: LoadBalancer type for external access  
 - **ConfigMap**: Application configuration
 - **Ingress**: Optional domain-based routing
+
+### 🔧 Troubleshooting
+
+**Error: "Metrics API not available"**
+
+This error occurs when running `kubectl top` commands. Docker Desktop doesn't include metrics server by default.
+
+**Solution 1: Install Metrics Server**
+```bash
+# Install metrics server
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Patch for Docker Desktop (bypass TLS verification)
+kubectl patch deployment metrics-server -n kube-system --patch '
+spec:
+  template:
+    spec:
+      containers:
+      - name: metrics-server
+        args:
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --metric-resolution=15s
+        - --kubelet-insecure-tls'
+
+# Wait for metrics server to be ready
+kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=60s
+
+# Test metrics
+kubectl top nodes
+kubectl top pods -l app=course-tracker
+```
+
+**Solution 2: Alternative Monitoring**
+```bash
+# Use describe instead of top
+kubectl describe pods -l app=course-tracker
+
+# Check resource requests/limits
+kubectl get pods -l app=course-tracker -o yaml | grep -A 10 resources
+
+# Monitor without metrics server
+kubectl get pods -l app=course-tracker --watch
+```
 
 ---
