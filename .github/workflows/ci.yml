@@ -1,0 +1,305 @@
+name: Week 5 CI/CD Pipeline
+
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'week 5/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'week 5/**'
+
+env:
+  REGISTRY_GHCR: ghcr.io
+  REGISTRY_DOCKERHUB: docker.io
+  IMAGE_NAME: simple-app
+  
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY_GHCR }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Log in to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY_DOCKERHUB }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./week\ 5/simple-app
+        file: ./week\ 5/simple-app/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Generate image digest
+      id: image
+      run: |
+        echo "digest=${{ steps.meta.outputs.digest }}" >> $GITHUB_OUTPUT
+        echo "image_ghcr=${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}@${{ steps.meta.outputs.digest }}" >> $GITHUB_OUTPUT
+        
+  update-k8s-manifests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+        
+    - name: Update Kubernetes manifest
+      run: |
+        # Create k8s directory if it doesn't exist
+        mkdir -p "week 5/k8s"
+        
+        # Create deployment.yaml if it doesn't exist
+        if [ ! -f "week 5/k8s/deployment.yaml" ]; then
+          cat > "week 5/k8s/deployment.yaml" << 'EOF'
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: simple-app
+          namespace: default
+          labels:
+            app: simple-app
+            version: v1
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
+              app: simple-app
+          template:
+            metadata:
+              labels:
+                app: simple-app
+                version: v1
+            spec:
+              containers:
+              - name: simple-app
+                image: ghcr.io/tamngo179/simple-app:latest
+                ports:
+                - containerPort: 8080
+                  name: http
+                env:
+                - name: SPRING_PROFILES_ACTIVE
+                  value: "production"
+                resources:
+                  requests:
+                    memory: "256Mi"
+                    cpu: "250m"
+                  limits:
+                    memory: "512Mi"
+                    cpu: "500m"
+                readinessProbe:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                livenessProbe:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 60
+                  periodSeconds: 20
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: simple-app-service
+          namespace: default
+          labels:
+            app: simple-app
+        spec:
+          selector:
+            app: simple-app
+          ports:
+            - name: http
+              protocol: TCP
+              port: 80
+              targetPort: 8080
+          type: ClusterIP
+        ---
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: simple-app-ingress
+          namespace: default
+          annotations:
+            nginx.ingress.kubernetes.io/rewrite-target: /
+            cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        spec:
+          tls:
+          - hosts:
+            - simple-app.local
+            secretName: simple-app-tls
+          rules:
+          - host: simple-app.local
+            http:
+              paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: simple-app-service
+                    port:
+                      number: 80
+        EOF
+        fi
+        
+        # Update image in deployment with new tag
+        NEW_TAG="sha-${{ github.sha }}"
+        sed -i "s|image: ghcr.io/.*/simple-app:.*|image: ghcr.io/${{ github.repository_owner }}/simple-app:${NEW_TAG}|g" "week 5/k8s/deployment.yaml"
+        
+    - name: Create or update kustomization.yaml
+      run: |
+        cat > "week 5/k8s/kustomization.yaml" << 'EOF'
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        
+        metadata:
+          name: simple-app
+          
+        resources:
+        - deployment.yaml
+        
+        images:
+        - name: ghcr.io/tamngo179/simple-app
+          newName: ghcr.io/${{ github.repository_owner }}/simple-app
+          newTag: sha-${{ github.sha }}
+          
+        commonLabels:
+          managed-by: github-actions
+          deployment-id: ${{ github.sha }}
+          
+        commonAnnotations:
+          deployment.kubernetes.io/revision: "${{ github.run_number }}"
+        EOF
+        
+    - name: Validate Kubernetes manifests
+      run: |
+        # Install kubectl for validation
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        
+        # Build with kustomize to validate
+        kustomize build "week 5/k8s" > /tmp/manifests.yaml
+        
+        # Basic validation
+        kubectl --dry-run=client apply -f /tmp/manifests.yaml
+        
+        echo "✅ Kubernetes manifests validation passed"
+        
+    - name: Commit and push manifest updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        if git diff --quiet "week 5/k8s/"; then
+          echo "No changes to commit"
+        else
+          git add "week 5/k8s/"
+          git commit -m "🚀 Update K8s manifests for simple-app:sha-${{ github.sha }}"
+          git push
+        fi
+        
+  security-scan:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'ghcr.io/${{ github.repository_owner }}/simple-app:sha-${{ github.sha }}'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+  notify:
+    needs: [build-and-push, update-k8s-manifests, security-scan]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name != 'pull_request'
+    
+    steps:
+    - name: Deployment Status Notification
+      run: |
+        if [ "${{ needs.build-and-push.result }}" == "success" ] && [ "${{ needs.update-k8s-manifests.result }}" == "success" ]; then
+          echo "🎉 Week 5 Deployment Successful!"
+          echo ""
+          echo "📦 Docker Images:"
+          echo "  - GHCR: ghcr.io/${{ github.repository_owner }}/simple-app:sha-${{ github.sha }}"
+          echo "  - GHCR: ghcr.io/${{ github.repository_owner }}/simple-app:latest"
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "  - Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/simple-app:sha-${{ github.sha }}"
+            echo "  - Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/simple-app:latest"
+          fi
+          echo ""
+          echo "🚀 Kubernetes Manifests Updated:"
+          echo "  - Location: week 5/k8s/"
+          echo "  - Image Tag: sha-${{ github.sha }}"
+          echo ""
+          echo "🔒 Security Scan: ${{ needs.security-scan.result }}"
+        else
+          echo "❌ Deployment Failed!"
+          echo "Build Status: ${{ needs.build-and-push.result }}"
+          echo "K8s Update Status: ${{ needs.update-k8s-manifests.result }}"
+          echo "Security Scan Status: ${{ needs.security-scan.result }}"
+          exit 1
+        fi
