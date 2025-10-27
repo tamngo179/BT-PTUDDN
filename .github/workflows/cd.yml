@@ -88,7 +88,7 @@ jobs:
 
     - name: Create or Update ArgoCD Application for Staging
       run: |
-        APP_NAME="simple-app-staging"
+        APP_NAME="course-tracker-staging"
         REPO_URL="https://github.com/${{ github.repository }}.git"
         TARGET_REVISION="${{ github.ref_name }}"
         IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
@@ -107,14 +107,14 @@ jobs:
             --auto-prune \
             --self-heal \
             --revision $TARGET_REVISION \
-            --kustomize-image "ghcr.io/${{ github.repository_owner }}/simple-app:$IMAGE_TAG"
+            --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
         fi
 
     - name: Update Application Image
       run: |
-        APP_NAME="simple-app-staging"
+        APP_NAME="course-tracker-staging"
         IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/simple-app:$IMAGE_TAG"
+        NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
         
         echo "🔄 Updating image to: $NEW_IMAGE"
         
@@ -194,7 +194,7 @@ jobs:
 
     - name: Create Production ArgoCD Application
       run: |
-        APP_NAME="simple-app-production"
+        APP_NAME="course-tracker-production"
         REPO_URL="https://github.com/${{ github.repository }}.git"
         IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
         
@@ -209,22 +209,22 @@ jobs:
             --dest-namespace production \
             --sync-policy manual \
             --revision main \
-            --kustomize-image "ghcr.io/${{ github.repository_owner }}/simple-app:$IMAGE_TAG"
+            --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
         fi
 
     - name: Update Production Image
       run: |
-        APP_NAME="simple-app-production"
+        APP_NAME="course-tracker-production"
         IMAGE_TAG="${{ needs.check-ci-status.outputs.image-tag }}"
-        NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/simple-app:$IMAGE_TAG"
+        NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/course-tracker:$IMAGE_TAG"
         
         echo "🔄 Updating production image to: $NEW_IMAGE"
         argocd app set $APP_NAME \
-          --kustomize-image "ghcr.io/${{ github.repository_owner }}/simple-app=$NEW_IMAGE"
+          --kustomize-image "ghcr.io/${{ github.repository_owner }}/course-tracker=$NEW_IMAGE"
 
     - name: Manual Production Sync
       run: |
-        APP_NAME="simple-app-production"
+        APP_NAME="course-tracker-production"
         
         echo "⚠️  Production deployment requires manual approval"
         echo "🔄 Initiating manual sync..."
@@ -235,7 +235,7 @@ jobs:
 
     - name: Validate Production Deployment
       run: |
-        APP_NAME="simple-app-production"
+        APP_NAME="course-tracker-production"
         
         HEALTH=$(argocd app get $APP_NAME -o json | jq -r '.status.health.status')
         SYNC=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.status')
@@ -268,7 +268,7 @@ jobs:
 
     - name: Rollback Application
       run: |
-        APP_NAME="simple-app-staging"
+        APP_NAME="course-tracker-staging"
         
         echo "🔄 Rolling back application..."
         

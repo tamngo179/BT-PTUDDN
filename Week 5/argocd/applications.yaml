@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: simple-app-staging
+  name: course-tracker-staging
   namespace: argocd
   labels:
-    app: simple-app
+    app: course-tracker
     environment: staging
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -19,7 +19,7 @@ spec:
     # Kustomize configuration
     kustomize:
       images:
-      - ghcr.io/tamngo179/simple-app:latest
+      - ghcr.io/tamngo179/course-tracker:latest
       
       # Environment-specific patches
       patchesStrategicMerge:
@@ -27,13 +27,13 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         metadata:
-          name: simple-app
+          name: course-tracker-deployment
         spec:
           replicas: 2
           template:
             spec:
               containers:
-              - name: simple-app
+              - name: course-tracker
                 env:
                 - name: SPRING_PROFILES_ACTIVE
                   value: "staging"
@@ -100,10 +100,10 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: simple-app-production
+  name: course-tracker-production
   namespace: argocd
   labels:
-    app: simple-app
+    app: course-tracker
     environment: production
   annotations:
     argocd.argoproj.io/sync-wave: "2"
@@ -117,7 +117,7 @@ spec:
     
     kustomize:
       images:
-      - ghcr.io/tamngo179/simple-app:latest
+      - ghcr.io/tamngo179/course-tracker:latest
       
       # Production-specific patches
       patchesStrategicMerge:
@@ -125,13 +125,13 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         metadata:
-          name: simple-app
+          name: course-tracker-deployment
         spec:
           replicas: 5
           template:
             spec:
               containers:
-              - name: simple-app
+              - name: course-tracker
                 env:
                 - name: SPRING_PROFILES_ACTIVE
                   value: "production"
