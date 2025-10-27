@@ -86,7 +86,7 @@ kubectl delete -f k8s/
 ```
 
 ### K8s Resources Created
-- **Deployment**: 2 replicas with health checks
+- **Deployment**: 3 replicas with health checks
 - **Service**: LoadBalancer type for external access  
 - **ConfigMap**: Application configuration
 - **Ingress**: Optional domain-based routing
@@ -138,3 +138,5 @@ kubectl get pods -l app=course-tracker --watch
 ```
 
 ---
+<img width="3273" height="1042" alt="image" src="https://github.com/user-attachments/assets/162635a0-ebcb-48ff-bcbe-145ea23743b3" />
+
