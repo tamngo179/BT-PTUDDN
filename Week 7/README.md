@@ -15,6 +15,7 @@
 ✓ Create Docker image
 ✓ Push to GitHub Container Registry
 ```
+<img width="3359" height="1354" alt="image" src="https://github.com/user-attachments/assets/10e6e51b-82eb-492e-886d-b74aee4dbbce" />
 
 ### ✅ ArgoCD Deployment
 ```
@@ -23,6 +24,8 @@ Status: Healthy & Synced
 Namespace: default
 Image: ghcr.io/tamngo179/course-tracker:latest
 ```
+<img width="2322" height="1759" alt="ảnh argo" src="https://github.com/user-attachments/assets/734322b9-c4f3-455b-829d-452a1a869bca" />
+
 
 ## 🌐 Access
 - **ArgoCD Dashboard**: http://localhost:8080
