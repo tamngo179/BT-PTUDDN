@@ -1,0 +1,80 @@
+# Alert Manager Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'ngo19012005@gmail.com'
+      smtp_auth_username: 'ngo19012005@gmail.com'
+      smtp_auth_password: 'your-app-password'
+      
+    route:
+      group_by: ['alertname']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+      routes:
+      - match:
+          alertname: HighCPUUsage
+        receiver: 'cpu-alert-team'
+        
+    receivers:
+    # Email notification
+    - name: 'cpu-alert-team'
+      email_configs:
+      - to: 'ngo19012005@gmail.com'
+        subject: '🚨 ALERT: High CPU Usage Detected'
+        body: |
+          Alert: {{ .GroupLabels.alertname }}
+          Summary: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          Description: {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          Instance: {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          Pod: {{ range .Alerts }}{{ .Labels.pod }}{{ end }}
+          Namespace: {{ range .Alerts }}{{ .Labels.namespace }}{{ end }}
+          
+          Current CPU Usage: {{ range .Alerts }}{{ .Labels.value }}%{{ end }}
+          
+          Timestamp: {{ range .Alerts }}{{ .StartsAt }}{{ end }}
+          
+      # Slack notification
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        username: 'Prometheus AlertManager'
+        icon_emoji: ':warning:'
+        title: '🚨 High CPU Usage Alert'
+        text: |
+          *Alert*: {{ .GroupLabels.alertname }}
+          *Summary*: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Instance*: {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Pod*: {{ range .Alerts }}{{ .Labels.pod }}{{ end }}
+          *CPU Usage*: {{ range .Alerts }}{{ .Labels.value }}%{{ end }}
+          *Severity*: {{ range .Alerts }}{{ .Labels.severity }}{{ end }}
+        
+      # Webhook notification (HTTP endpoint)
+      webhook_configs:
+      - url: 'http://your-webhook-endpoint.com/alerts'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'webhook-user'
+            password: 'webhook-password'
+        
+    # Default webhook receiver
+    - name: 'web.hook'
+      webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+    inhibit_rules:
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'instance']

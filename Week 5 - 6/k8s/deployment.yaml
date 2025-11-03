@@ -5,7 +5,7 @@ metadata:
   labels:
     app: course-tracker
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: course-tracker
@@ -13,11 +13,15 @@ spec:
     metadata:
       labels:
         app: course-tracker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8080"
     spec:
       containers:
       - name: course-tracker
-        image: ghcr.io/tamngo179/course-tracker:latest
-        imagePullPolicy: Always  # Use remote image
+        image: course-tracker:latest
+        imagePullPolicy: Never  # Use local image
         ports:
         - containerPort: 8080
         env:
@@ -34,13 +38,13 @@ spec:
             cpu: "500m"
         readinessProbe:
           httpGet:
-            path: /
+            path: /actuator/health
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         livenessProbe:
           httpGet:
-            path: /
+            path: /actuator/health
             port: 8080
           initialDelaySeconds: 60
           periodSeconds: 30

@@ -1,0 +1,76 @@
+# Prometheus Alerting Rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  cpu-rules.yml: |
+    groups:
+    - name: cpu.rules
+      rules:
+      
+      # High CPU Usage Alert - Pod level
+      - alert: HighCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{container!=""}[1m]) * 100) > 80
+        for: 1m
+        labels:
+          severity: warning
+          service: course-tracker
+        annotations:
+          summary: "High CPU usage detected on pod {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has CPU usage above 80% (current value: {{ $value }}%) for more than 1 minute."
+          runbook_url: "https://your-company.com/runbooks/high-cpu"
+          
+      # Critical CPU Usage Alert
+      - alert: CriticalCPUUsage
+        expr: (rate(container_cpu_usage_seconds_total{container!=""}[1m]) * 100) > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: course-tracker
+        annotations:
+          summary: "Critical CPU usage detected on pod {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has CPU usage above 90% (current value: {{ $value }}%) for more than 2 minutes."
+          action: "Consider scaling up or investigating the application"
+          
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: (container_memory_working_set_bytes{container!=""} / container_spec_memory_limit_bytes{container!=""}) * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+          service: course-tracker
+        annotations:
+          summary: "High memory usage detected on pod {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has memory usage above 80% (current value: {{ $value }}%) for more than 1 minute."
+          
+      # Pod Restart Alert
+      - alert: PodRestartTooMuch
+        expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} is restarting too frequently"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than 3 times in the last hour."
+          
+      # Service Down Alert
+      - alert: ServiceDown
+        expr: up{job="course-tracker-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 30 seconds."
+          
+      # High Response Time Alert
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 1 second for more than 5 minutes (current value: {{ $value }}s)."

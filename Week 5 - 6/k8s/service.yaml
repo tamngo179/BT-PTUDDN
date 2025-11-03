@@ -1,16 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: simple-app-service
+  name: course-tracker-service
   namespace: default
   labels:
-    app: simple-app
+    app: course-tracker
 spec:
   selector:
-    app: simple-app
+    app: course-tracker
   ports:
     - name: http
       protocol: TCP
       port: 80
       targetPort: 8080
-  type: ClusterIP
+      nodePort: 30080
+  type: NodePort

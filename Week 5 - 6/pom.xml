@@ -52,6 +52,16 @@
         <artifactId>spring-boot-devtools</artifactId>
         <scope>runtime</scope>
     </dependency>
+    <!-- Actuator for health checks and metrics -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Micrometer Prometheus registry for metrics export -->
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
 </dependencies>
 
 
