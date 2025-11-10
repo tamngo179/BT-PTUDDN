@@ -10,7 +10,7 @@ data:
       smtp_smarthost: 'smtp.gmail.com:587'
       smtp_from: 'ngo19012005@gmail.com'
       smtp_auth_username: 'ngo19012005@gmail.com'
-      smtp_auth_password: 'your-app-password'
+      smtp_auth_password: 'Tam.191205'
       
     route:
       group_by: ['alertname']
