@@ -1,0 +1,31 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: kafka-producer
+  kafka:
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 1
+      buffer-memory: 33554432
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+
+logging:
+  level:
+    com.example.producer: INFO
+    org.apache.kafka: INFO
+
+app:
+  kafka:
+    topic:
+      name: user-events
+      partitions: 3
+      replication-factor: 3
