@@ -27,7 +27,7 @@ public class KafkaConsumerService {
     public void consumeMessage(
             @Payload UserMessage message,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
-            @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
             ConsumerRecord<String, UserMessage> consumerRecord) {
         

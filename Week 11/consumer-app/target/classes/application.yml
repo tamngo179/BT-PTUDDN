@@ -1,0 +1,31 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: kafka-consumer
+  kafka:
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+    consumer:
+      group-id: user-events-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.example.consumer.model,com.example.producer.model"
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 3000
+        max.poll.interval.ms: 300000
+        max.poll.records: 100
+        enable.auto.commit: true
+        auto.commit.interval.ms: 5000
+
+logging:
+  level:
+    com.example.consumer: INFO
+    org.apache.kafka: INFO
+
+app:
+  kafka:
+    topic:
+      name: user-events

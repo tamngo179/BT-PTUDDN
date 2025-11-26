@@ -1,0 +1,4 @@
+com\example\consumer\controller\ConsumerController.class
+com\example\consumer\model\UserMessage.class
+com\example\consumer\ConsumerApplication.class
+com\example\consumer\service\KafkaConsumerService.class
